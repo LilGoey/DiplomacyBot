@@ -3,8 +3,13 @@ import re
 import time
 import google.generativeai as genai
 from PIL import Image
+from dotenv import load_dotenv
+import os
 
-genai.configure(api_key="AIzaSyBPrRyvMESlL4l5EUm7VFtuiSiZjir_N1Q")
+load_dotenv()
+api_key=os.getenv("GEMINI_API_KEY")
+
+genai.configure(api_key=api_key)
 
 class DipBot():
 
@@ -426,6 +431,68 @@ class DipBot():
 
         return filename
 
+    def get_orders(self):
+        orders = []
+
+        # Locate all rows in the orders table
+        rows = self.page.locator('table.orders tbody tr')
+
+        for i in range(rows.count()):
+            row = rows.nth(i)
+
+            # Get unit type: "Army" or "Fleet"
+            unit_icon = row.locator('td.uniticon img')
+            unit_type = unit_icon.get_attribute('alt').strip()
+
+            # Get order container
+            order_div = row.locator('td.order div')
+
+            # Extract current territory (e.g., "The fleet at Algeria" → "Algeria")
+            order_text = order_div.locator('.orderSegment.orderBegin').inner_text().strip()
+            if " at " in order_text:
+                current_territory = order_text.split(" at ")[1].strip(" .")
+            else:
+                current_territory = None
+
+            # Get the action dropdown
+            action_select = order_div.locator('select[ordertype="type"]')
+            selected_action = action_select.locator('option[selected]').get_attribute('value')
+            possible_actions = action_select.locator('option').all_inner_texts()
+
+            # Default values for movement options
+            to_territory = None
+            from_territory = None
+            to_options = []
+            from_options = []
+
+            # Try to get destination options (toTerrID)
+            to_selector = order_div.locator('select[ordertype="toTerrID"]')
+            if to_selector.count() > 0:
+                selected_to = to_selector.locator('option[selected]')
+                to_territory = selected_to.inner_text().strip() if selected_to.count() > 0 else None
+                to_options = [opt.strip() for opt in to_selector.locator('option').all_inner_texts() if opt.strip()]
+
+            # Try to get source options (fromTerrID) for support move etc.
+            from_selector = order_div.locator('select[ordertype="fromTerrID"]')
+            if from_selector.count() > 0:
+                selected_from = from_selector.locator('option[selected]')
+                from_territory = selected_from.inner_text().strip() if selected_from.count() > 0 else None
+                from_options = [opt.strip() for opt in from_selector.locator('option').all_inner_texts() if opt.strip()]
+
+            orders.append({
+                "unit_type": unit_type,
+                "current_territory": current_territory,
+                "selected_action": selected_action,
+                "possible_actions": possible_actions,
+                "to_territory": to_territory,
+                "from_territory": from_territory,
+                "to_options": to_options,
+                "from_options": from_options
+            })
+
+        return orders
+
+
     def close(self):
         self.browser.close()
         self.playwright.stop()
@@ -445,8 +512,8 @@ if __name__ == "__main__":
         
         # will get all of the countryIDs from chats that are already open
         bot.get_countryIDs_from_open_chats()
-        bot.get_unit_ids_and_location()
-    
+        orders = bot.get_orders()
+        print(orders)
 
         if not bot.is_ready():
 

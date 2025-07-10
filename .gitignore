@@ -1,3 +1,4 @@
 venv/
 maps/
 lhd_map_host.py
+.env
